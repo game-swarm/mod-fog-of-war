@@ -1,44 +1,6 @@
 use bevy::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
-
-pub type PlayerId = u32;
-
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct RoomId(pub u32);
-
-impl RoomId {
-    pub fn adjacent(self, dx: i32, dy: i32) -> Option<Self> {
-        let next = self.0 as i64 + dx as i64 + dy as i64 * 10_000;
-        (next >= 0).then_some(Self(next as u32))
-    }
-}
-
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Position {
-    pub x: i32,
-    pub y: i32,
-    pub room: RoomId,
-}
-
-#[derive(Component, Debug, Clone, Copy)]
-pub struct Owner(pub PlayerId);
-
-#[derive(Component, Debug, Clone)]
-pub struct Drone {
-    pub owner: PlayerId,
-}
-
-#[derive(Component, Debug, Clone)]
-pub struct Structure {
-    pub owner: Option<PlayerId>,
-    pub observer_level: u8,
-}
-
-#[derive(Component, Debug, Clone)]
-pub struct Controller {
-    pub owner: Option<PlayerId>,
-    pub level: u8,
-}
+use swarm_engine::components::{Controller, Drone, Owner, PlayerId, Position, Structure};
 
 #[derive(Resource, Debug, Clone)]
 pub struct VisibilityConfig {
@@ -54,7 +16,24 @@ impl Default for VisibilityConfig {
 #[derive(Resource, Debug, Clone, Default)]
 pub struct VisibilityMap {
     pub visible_entities: BTreeMap<PlayerId, BTreeSet<Entity>>,
-    pub visible_positions: BTreeMap<PlayerId, BTreeSet<Position>>,
+    pub visible_positions: BTreeMap<PlayerId, BTreeSet<PositionKey>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PositionKey {
+    pub room: u32,
+    pub x: i32,
+    pub y: i32,
+}
+
+impl From<Position> for PositionKey {
+    fn from(position: Position) -> Self {
+        Self {
+            room: position.room.0,
+            x: position.x,
+            y: position.y,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -100,7 +79,7 @@ pub fn visibility_snapshot_system(
 
     let all_position_set: BTreeSet<_> = all_entities
         .iter()
-        .filter_map(|(_, position)| position.copied())
+        .filter_map(|(_, position)| position.copied().map(PositionKey::from))
         .collect();
 
     for player in players {
@@ -114,7 +93,7 @@ pub fn visibility_snapshot_system(
             .iter()
             .filter_map(|(entity, position)| {
                 position
-                    .is_some_and(|position| visible_positions.contains(position))
+                    .is_some_and(|position| visible_positions.contains(&PositionKey::from(*position)))
                     .then_some(entity)
             })
             .collect();
@@ -135,7 +114,7 @@ fn player_visible_positions(
     structures: &Query<(&Structure, &Position)>,
     controllers: &Query<(&Controller, &Position)>,
     owners: &Query<(&Owner, &Position)>,
-) -> BTreeSet<Position> {
+) -> BTreeSet<PositionKey> {
     let mut anchors = Vec::new();
     let mut room_radius = 1u32;
 
@@ -146,13 +125,22 @@ fn player_visible_positions(
     }
     for (structure, position) in structures {
         if structure.owner == Some(player) {
-            anchors.push((*position, 1 + structure.observer_level as u32));
-            room_radius = room_radius.max(1 + structure.observer_level as u32);
+            let radius = if structure.structure_type == swarm_engine::components::StructureType::OBSERVER {
+                2
+            } else {
+                1
+            };
+            anchors.push((*position, radius));
+            room_radius = room_radius.max(radius);
         }
     }
     for (controller, position) in controllers {
         if controller.owner == Some(player) {
-            let radius = if controller.level >= 5 { 1 + (controller.level - 4) as u32 } else { 1 };
+            let radius = if controller.level >= 5 {
+                1 + (controller.level - 4) as u32
+            } else {
+                1
+            };
             anchors.push((*position, radius));
             room_radius = room_radius.max(radius);
         }
@@ -168,11 +156,11 @@ fn player_visible_positions(
         for dy in -(radius as i32)..=(radius as i32) {
             for dx in -(radius as i32)..=(radius as i32) {
                 if let Some(room) = anchor.room.adjacent(dx, dy) {
-                    visible.insert(Position {
+                    visible.insert(PositionKey::from(Position {
                         x: anchor.x,
                         y: anchor.y,
                         room,
-                    });
+                    }));
                 }
             }
         }
