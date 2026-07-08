@@ -93,7 +93,9 @@ pub fn visibility_snapshot_system(
             .iter()
             .filter_map(|(entity, position)| {
                 position
-                    .is_some_and(|position| visible_positions.contains(&PositionKey::from(*position)))
+                    .is_some_and(|position| {
+                        visible_positions.contains(&PositionKey::from(*position))
+                    })
                     .then_some(entity)
             })
             .collect();
@@ -125,11 +127,12 @@ fn player_visible_positions(
     }
     for (structure, position) in structures {
         if structure.owner == Some(player) {
-            let radius = if structure.structure_type == swarm_engine::components::StructureType::OBSERVER {
-                2
-            } else {
-                1
-            };
+            let radius =
+                if structure.structure_type == swarm_engine::components::StructureType::OBSERVER {
+                    2
+                } else {
+                    1
+                };
             anchors.push((*position, radius));
             room_radius = room_radius.max(radius);
         }
