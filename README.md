@@ -28,3 +28,12 @@ fog_of_war = true
 
 - 写入: `VisibilityMap`（每玩家每 tick）
 - 读取: `Position`, `Drone`, `Structure`, `Controller`, `PlayerId`
+
+## Standalone Development
+
+This repository is consumable as an independent Cargo crate. It pins `swarm-engine` from `https://github.com/game-swarm/engine.git` at rev `4f9776302d0784e78bc5f04c7e38e28cc6d4c633`; no sibling checkout layout is required.
+
+```sh
+cargo check
+cargo test
+```
