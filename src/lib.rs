@@ -170,3 +170,31 @@ fn player_visible_positions(
     }
     visible
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use swarm_engine::components::RoomId;
+
+    #[test]
+    fn position_key_preserves_room_and_coordinates() {
+        let key = PositionKey::from(Position {
+            x: -3,
+            y: 9,
+            room: RoomId(42),
+        });
+
+        assert_eq!(key.room, 42);
+        assert_eq!(key.x, -3);
+        assert_eq!(key.y, 9);
+    }
+
+    #[test]
+    fn missing_visibility_entry_is_not_visible() {
+        let map = VisibilityMap::default();
+        let mut world = World::new();
+        let entity = world.spawn_empty().id();
+
+        assert!(!is_visible_to(&map, 1, entity));
+    }
+}
