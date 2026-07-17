@@ -18,7 +18,16 @@
 
 ## 配置
 
-world.toml:
+Engine 按 `mod.toml` 类型定义严格解码以下配置。`fog_of_war` 同时注入模组 `VisibilityConfig` 和权威可见性配置；`player_view` 控制 Engine 输出 `drone`、`full` 或 `allied` 玩家视图。显式 `world.toml [visibility]` 字段优先于 `mods.lock` 对应值。
+
+`mod.toml`:
+```toml
+[config]
+fog_of_war = { type = "bool", default = true }
+player_view = { type = "enum", values = ["drone", "full", "allied"], default = "drone" }
+```
+
+`world.toml` 示例:
 ```toml
 [visibility]
 fog_of_war = true
