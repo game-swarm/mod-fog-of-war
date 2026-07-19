@@ -1,6 +1,13 @@
 use bevy::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
-use swarm_engine::components::{Controller, Drone, Owner, PlayerId, Position, Structure};
+use swarm_engine_api::prelude::{
+    API_VERSION, ConfigFieldDescriptor, ConfigValueType, DESCRIPTOR_SCHEMA_VERSION, PlayerId,
+    PluginDescriptor, SystemDescriptor, TickPhase,
+};
+use swarm_engine_plugin_sdk::prelude::{
+    Controller, Drone, Owner, Position, Structure, StructureType,
+};
+use swarm_engine_plugin_sdk::traits::SwarmPlugin;
 
 #[derive(Resource, Debug, Clone)]
 pub struct VisibilityConfig {
@@ -44,6 +51,55 @@ impl Plugin for FogOfWarModPlugin {
         app.init_resource::<VisibilityConfig>()
             .init_resource::<VisibilityMap>()
             .add_systems(Update, visibility_snapshot_system);
+    }
+}
+
+impl SwarmPlugin for FogOfWarModPlugin {
+    fn descriptor() -> PluginDescriptor {
+        PluginDescriptor {
+            id: "fog-of-war".to_string(),
+            version: "0.1.0".to_string(),
+            api_version: API_VERSION.to_string(),
+            dependencies: Vec::new(),
+            config: vec![
+                ConfigFieldDescriptor {
+                    key: "fog_of_war".to_string(),
+                    value_type: ConfigValueType::Bool,
+                    default: true.into(),
+                    required: false,
+                    validator: None,
+                },
+                ConfigFieldDescriptor {
+                    key: "player_view".to_string(),
+                    value_type: ConfigValueType::Enum {
+                        values: ["drone", "full", "allied"].map(str::to_string).to_vec(),
+                    },
+                    default: "drone".into(),
+                    required: false,
+                    validator: None,
+                },
+            ],
+            systems: vec![SystemDescriptor {
+                system_id: "fog-of-war.snapshot".to_string(),
+                version: "0.1.0".to_string(),
+                phase: TickPhase::Update,
+                order: 0,
+                reads: vec![
+                    "VisibilityConfig".to_string(),
+                    "Position".to_string(),
+                    "Drone".to_string(),
+                    "Structure".to_string(),
+                    "Controller".to_string(),
+                    "Owner".to_string(),
+                ],
+                writes: vec!["VisibilityMap".to_string()],
+                produces_buffers: Vec::new(),
+                consumes_buffers: Vec::new(),
+                deterministic_iteration: vec!["PlayerId".to_string()],
+            }],
+            actions: Vec::new(),
+            descriptor_schema_version: DESCRIPTOR_SCHEMA_VERSION.to_string(),
+        }
     }
 }
 
@@ -127,12 +183,11 @@ fn player_visible_positions(
     }
     for (structure, position) in structures {
         if structure.owner == Some(player) {
-            let radius =
-                if structure.structure_type == swarm_engine::components::StructureType::OBSERVER {
-                    2
-                } else {
-                    1
-                };
+            let radius = if structure.structure_type == StructureType::OBSERVER {
+                2
+            } else {
+                1
+            };
             anchors.push((*position, radius));
             room_radius = room_radius.max(radius);
         }
@@ -174,7 +229,7 @@ fn player_visible_positions(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use swarm_engine::components::RoomId;
+    use swarm_engine_api::ids::RoomId;
 
     #[test]
     fn position_key_preserves_room_and_coordinates() {
@@ -196,5 +251,24 @@ mod tests {
         let entity = world.spawn_empty().id();
 
         assert!(!is_visible_to(&map, 1, entity));
+    }
+
+    #[test]
+    fn descriptor_is_valid_and_identifies_fog_of_war() {
+        let descriptor = FogOfWarModPlugin::descriptor();
+        swarm_engine_api::validation::assert_valid_descriptor(&descriptor);
+        assert_eq!(descriptor.id, "fog-of-war");
+        assert_eq!(descriptor.config.len(), 2);
+        assert_eq!(descriptor.systems.len(), 1);
+        assert_eq!(
+            descriptor
+                .config
+                .iter()
+                .map(|field| field.key.as_str())
+                .collect::<Vec<_>>(),
+            ["fog_of_war", "player_view"]
+        );
+        assert_eq!(descriptor.systems[0].system_id, "fog-of-war.snapshot");
+        assert!(descriptor.dependencies.is_empty());
     }
 }
