@@ -18,7 +18,7 @@
 
 ## 配置
 
-Engine 按 `mod.toml` 类型定义严格解码以下配置。`fog_of_war` 同时注入模组 `VisibilityConfig` 和权威可见性配置；`player_view` 控制 Engine 输出 `drone`、`full` 或 `allied` 玩家视图。显式 `world.toml [visibility]` 字段优先于 `mods.lock` 对应值。
+Engine 按 `mod.toml` 类型定义严格解码 `world.toml [mods.fog-of-war]`。resolved `fog_of_war`/`player_view` 配置权威可见性与 replay identity，显式 `world.toml [visibility]` 字段优先；`mods.lock` 不保存 gameplay config。native `VisibilityConfig` 当前保持 defaults-only fog flag，`player_view` 只属于 engine-owned config。
 
 `mod.toml`:
 ```toml
@@ -40,11 +40,11 @@ fog_of_war = true
 
 ## Standalone Development
 
-This crate depends on `swarm-engine-api` and `swarm-engine-plugin-sdk` at the exact `0.1.0` release from the `v0.1.0` tag in the `game-swarm/engine-api` repository. Cargo fetches these dependencies directly; no sibling API checkout is required.
+This crate pins `swarm-engine-api` and `swarm-engine-plugin-sdk` to canonical source `https://github.com/game-swarm/engine-api.git`, exact version `0.1.0`, and identical full revision `0d97444af0c8f8c563bbe58837a4fdf8753630cf`. Cargo fetches both crates directly; no sibling API checkout is required.
 
 ```sh
 cargo check
 cargo test
 ```
 
-To adopt a later API/SDK release, update both exact versions and the Git tag in `Cargo.toml` together.
+To adopt a later API/SDK release, update both canonical URLs, both exact versions, and both full Git revisions in `Cargo.toml` together, then regenerate `Cargo.lock` and verify both packages resolve to the same commit.
