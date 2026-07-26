@@ -1,9 +1,11 @@
 use bevy::prelude::*;
+use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use swarm_engine_api::prelude::{
     API_VERSION, ConfigFieldDescriptor, ConfigValueType, DESCRIPTOR_SCHEMA_VERSION, PlayerId,
     PluginDescriptor, SystemDescriptor, TickPhase,
 };
+use swarm_engine_plugin_sdk::native::{NativeModRegisterContext, NativeModRegisterError};
 use swarm_engine_plugin_sdk::prelude::{
     Controller, Drone, Owner, Position, Structure, StructureType,
 };
@@ -101,6 +103,44 @@ impl SwarmPlugin for FogOfWarModPlugin {
             descriptor_schema_version: DESCRIPTOR_SCHEMA_VERSION.to_string(),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfiguredFogOfWarModPlugin {
+    config: VisibilityConfig,
+}
+
+impl Plugin for ConfiguredFogOfWarModPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(self.config.clone());
+        FogOfWarModPlugin.build(app);
+    }
+}
+
+impl SwarmPlugin for ConfiguredFogOfWarModPlugin {
+    fn descriptor() -> PluginDescriptor {
+        FogOfWarModPlugin::descriptor()
+    }
+
+    fn register(app: &mut App) {
+        FogOfWarModPlugin::register(app);
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct FogOfWarRegisterConfig {
+    fog_of_war: bool,
+    player_view: String,
+}
+
+pub fn register(context: &mut NativeModRegisterContext<'_>) -> Result<(), NativeModRegisterError> {
+    let config = context.decode_config::<FogOfWarRegisterConfig>()?;
+    let _player_view = config.player_view;
+    context.install(ConfiguredFogOfWarModPlugin {
+        config: VisibilityConfig {
+            fog_of_war: config.fog_of_war,
+        },
+    })
 }
 
 pub fn visibility_snapshot_system(
@@ -270,5 +310,55 @@ mod tests {
         );
         assert_eq!(descriptor.systems[0].system_id, "fog-of-war.snapshot");
         assert!(descriptor.dependencies.is_empty());
+    }
+
+    #[test]
+    fn native_register_preserves_descriptor_resource_and_system_behavior() {
+        use swarm_engine_api::prelude::WorldMode;
+        use swarm_engine_plugin_sdk::native::{
+            NativeModConfig, NativeModInstallExpectation, NativeModRegisterContext,
+        };
+        use swarm_engine_plugin_sdk::resources::InstalledPluginDescriptors;
+
+        let mut app = App::new();
+        let mut context = NativeModRegisterContext::new(
+            &mut app,
+            "fog-of-war",
+            WorldMode::Default,
+            NativeModConfig::from_defaults(serde_json::json!({
+                "fog_of_war": false,
+                "player_view": "full"
+            })),
+            NativeModInstallExpectation::enabled("0.1.0"),
+        );
+
+        register(&mut context).expect("register fog-of-war");
+        drop(context);
+
+        assert!(!app.world().resource::<VisibilityConfig>().fog_of_war);
+        assert_eq!(
+            app.world()
+                .resource::<InstalledPluginDescriptors>()
+                .get("fog-of-war"),
+            Some(&FogOfWarModPlugin::descriptor())
+        );
+        app.world_mut()
+            .resource_mut::<VisibilityMap>()
+            .visible_positions
+            .insert(
+                42,
+                BTreeSet::from([PositionKey {
+                    room: 0,
+                    x: 1,
+                    y: 2,
+                }]),
+            );
+        app.world_mut().run_schedule(Update);
+        assert!(
+            app.world()
+                .resource::<VisibilityMap>()
+                .visible_positions
+                .is_empty()
+        );
     }
 }
