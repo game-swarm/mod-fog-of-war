@@ -18,7 +18,7 @@
 
 ## 配置
 
-Engine 按 `mod.toml` 类型定义严格解码 `world.toml [mods.fog-of-war]`。resolved `fog_of_war`/`player_view` 配置权威可见性与 replay identity，显式 `world.toml [visibility]` 字段优先；`mods.lock` 不保存 gameplay config。native `VisibilityConfig` 当前保持 defaults-only fog flag，`player_view` 只属于 engine-owned config。
+Engine 按 `mod.toml` 类型定义严格解码 `world.toml [mods.fog-of-war]`。resolved `fog_of_war`/`player_view` 配置权威可见性与 replay identity，显式 `world.toml [visibility]` 字段优先；`mods.lock` 不保存 gameplay config。production native register context 保持 defaults-only boundary，并把 versioned `fog_of_war` 与 `player_view` defaults 都映射到 `VisibilityConfig`；`world.toml` override 仍只进入 engine-owned visibility config。
 
 `mod.toml`:
 ```toml
